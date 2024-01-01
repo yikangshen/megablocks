@@ -32,6 +32,10 @@ class Arguments:
     moe_loss_weight : float = 0.1
     moe_jitter_eps : Optional[float] = None
     moe_lbl_in_fp32 : bool = False
+    acc_aux_loss : bool = False
+    gate_hidden_size : int = 256
+    aux_loss : str = 'switch'
+    gate_type : str = 'linear'
 
     # Parallelism arguments.
     moe_expert_model_parallelism : bool = False

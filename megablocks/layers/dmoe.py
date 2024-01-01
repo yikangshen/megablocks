@@ -4,6 +4,7 @@ from megablocks.layers import dmlp_registry
 from megablocks.layers import mpu
 from megablocks.layers import router
 from megablocks.layers.arguments import Arguments
+from megablocks.layers.gate import top_k_gating
 import megablocks.ops as ops
 import numpy as np
 import stk
@@ -310,10 +311,22 @@ class dMoE(torch.nn.Module):
         super(dMoE, self).__init__()
 
         # Token router.
-        self.router = router.LearnedRouter(args)
+        # self.router = router.LearnedRouter(args)
+        self.router = top_k_gating(
+            input_size=args.hidden_size,
+            num_experts=args.moe_num_experts,
+            top_k=args.moe_top_k,
+            acc_aux_loss=args.acc_aux_loss,
+            hidden_size=args.gate_hidden_size,
+            aux_loss=args.aux_loss,
+            gate_type=args.gate_type,
+            )
 
         # Expert computation helper.
         self.experts = ParallelDroplessMLP(args)
+
+    def get_aux_loss_and_clear(self):
+        return self.router.get_aux_loss_and_clear()
 
     def forward(self, x):
         # NOTE: If we're going to cast the activations to lower precision
@@ -324,4 +337,4 @@ class dMoE(torch.nn.Module):
         scores, expert_weights, top_experts = self.router(x)
 
         # Compute the experts.
-        return self.experts(x, scores, expert_weights, top_experts)
+        return self.experts(x, scores, expert_weights, top_experts), self.router.loss
