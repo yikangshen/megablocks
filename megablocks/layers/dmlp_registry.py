@@ -1,13 +1,15 @@
 from typing import Union
 from megablocks.layers import mlp
 from megablocks.layers import glu
+from megablocks.layers import linear
 from megablocks.layers.arguments import Arguments
 
-MlpType = Union[mlp.SparseMLP, glu.SparseGLU]
+MlpType = Union[mlp.SparseMLP, glu.SparseGLU, linear.SparseLinear]
 
 _REGISTRY = {
     'mlp': {'grouped': mlp.GroupedMLP, 'sparse' : mlp.SparseMLP},
     'glu': {'grouped': glu.GroupedGLU, 'sparse': glu.SparseGLU},
+    'linear': {'grouped': linear.GroupedLinear, 'sparse': linear.SparseLinear},
 }
 
 def get(args: Arguments) -> MlpType:
