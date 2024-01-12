@@ -22,7 +22,6 @@ class ParallelDroplessMLP(moe.ParallelMLP):
         self.ffn_hidden_size = mpu.features_per_rank(args)
         self.blocking = 128
         self.mlp = dmlp_registry.get(args)
-        self.reduce_mlp = dmlp_registry.get(args)
 
         # Calculate the number of bits needed to represent the column indices
         # in the intermediate sparse matrix.
@@ -52,7 +51,7 @@ class ParallelDroplessMLP(moe.ParallelMLP):
             -1,  # unused
             self.top_k,
             map=True)
-        return out.view(sl, bs, self.top_k, hs)
+        return out.view(sl, bs, self.top_k, self.ffn_hidden_size)
     
     def reduce(self, x):
         # x: [sl, bs, k, hs]
@@ -68,7 +67,7 @@ class ParallelDroplessMLP(moe.ParallelMLP):
             -1,  # unused
             self.args.moe_top_k,
             map=False)
-        return out.view(sl, bs, hs)
+        return out.view(sl, bs, self.hidden_size)
 
     def grouped_permute_and_compute(
             self,
@@ -93,9 +92,9 @@ class ParallelDroplessMLP(moe.ParallelMLP):
 
         # Perform the expert computation.
         if map:
-            x = self.mlp(x, tokens_per_expert)
+            x = self.mlp.map(x, tokens_per_expert)
         else:
-            x = self.reduce_mlp(x, tokens_per_expert)
+            x = self.mlp.reduce(x, tokens_per_expert)
 
         # Un-route the data for the MoE output.
         return ops.scatter(
