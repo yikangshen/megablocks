@@ -64,8 +64,6 @@ class top_k_gating(nn.Module):
             print(gate_type)
             raise NotImplementedError
 
-        self.world_size = dist.get_world_size()
-
     def extra_repr(self):
         return 'k={}, miloss={}, noisy_gating={}'.format(
             self.top_k, self.miloss, self.noisy_gating)
@@ -147,8 +145,8 @@ class top_k_gating(nn.Module):
         else:
             top_k_gates, top_k_indices = probs.topk(self.top_k, dim=1)
 
-        # if self.top_k > 1:
-        #     top_k_gates = top_k_gates / (top_k_gates.sum(dim=1, keepdim=True) + 1e-6)
+        if self.top_k > 1:
+            top_k_gates = top_k_gates / (top_k_gates.sum(dim=1, keepdim=True) + 1e-6)
         
         # gate = torch.zeros_like(top_k_gates)
         # gate[:, 0] = 1
