@@ -572,3 +572,39 @@ class GroupedMLP(SparseMLP):
         x = gg.ops.gmm(x, w1, batch_sizes, trans_b=True)
         x = self.args.activation_fn(x)
         return gg.ops.gmm(x, w2, batch_sizes)
+
+    def map(self, x, tokens_per_expert):
+        batch_sizes = tokens_per_expert.cpu().to(torch.long)
+        w1 = self.scale_grad(self.w1)
+
+        # Re-shape the weights for the grouped GEMMs.
+        ne = mpu.experts_per_rank(self.args)
+        w1 = resolve_dtensor(w1).view(ne, -1, self.args.hidden_size)
+
+        if self.args.moe_weight_parallelism:
+            raise NotImplementedError(
+                "Weight parallelism not yet supported with GroupedMLP.")
+
+        if self.args.memory_optimized_mlp:
+            raise NotImplementedError
+
+        # Compute the MLP.
+        return gg.ops.gmm(x, w1, batch_sizes, trans_b=True)
+    
+    def reduce(self, x, tokens_per_expert):
+        batch_sizes = tokens_per_expert.cpu().to(torch.long)
+        w2 = self.scale_grad(self.w2)
+
+        # Re-shape the weights for the grouped GEMMs.
+        ne = mpu.experts_per_rank(self.args)
+        w2 = resolve_dtensor(w2).view(ne, -1, self.args.hidden_size)
+
+        if self.args.moe_weight_parallelism:
+            raise NotImplementedError(
+                "Weight parallelism not yet supported with GroupedMLP.")
+
+        if self.args.memory_optimized_mlp:
+            raise NotImplementedError
+
+        # Compute the MLP.
+        return gg.ops.gmm(x, w2, batch_sizes)
