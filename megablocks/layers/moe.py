@@ -32,7 +32,7 @@ def batched_load_balancing_loss(args : Arguments):
     # expert_scores[i].shape = (tokens, num_experts)
     tokens_per_expert, expert_scores = zip(*get_load_balancing_loss())
     num_layers_per_pipeline_stage = (
-        args.num_layers // args.pipeline_model_parallel_size)
+        args.num_layers * 2 // args.pipeline_model_parallel_size)
     if args.num_layers_per_virtual_pipeline_stage is not None:
         num_layers_per_pipeline_stage = args.num_layers_per_virtual_pipeline_stage
 

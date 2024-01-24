@@ -1,6 +1,6 @@
 from megablocks.layers import common
 from megablocks.layers import moe
-from megablocks.layers import dmlp_registry
+from megablocks.layers import mlp
 from megablocks.layers import mpu
 from megablocks.layers import router
 from megablocks.layers.arguments import Arguments
@@ -18,7 +18,8 @@ class ParallelDroplessLinear(moe.ParallelMLP):
         self.hidden_size = args.hidden_size
         self.ffn_hidden_size = mpu.features_per_rank(args)
         self.blocking = 128
-        self.mlp = dmlp_registry.get(args)
+        # self.mlp = dmlp_registry.get(args)
+        self.mlp = mlp.GroupedMLP(args)
 
         # Calculate the number of bits needed to represent the column indices
         # in the intermediate sparse matrix.
@@ -27,7 +28,7 @@ class ParallelDroplessLinear(moe.ParallelMLP):
         self.transpose_sort_end_bit = max(
             int(np.ceil(np.log2(max_column_index))), 1)
     
-    def map(self, x, expert_weights, top_experts):
+    def map(self, x, scores, expert_weights, top_experts):
         # x: [sl, bs, hs]
         # expert_weights: [sl * bs, top-k]
         # top_experts: [sl * bs, top-k]
@@ -37,6 +38,9 @@ class ParallelDroplessLinear(moe.ParallelMLP):
         with torch.no_grad():
             self.indices, self.bin_ids, self.bins, self.tokens_per_expert = (
                 self.indices_and_bins(top_experts))
+        
+        if self.training:
+            moe.save_load_balancing_loss((self.tokens_per_expert, scores))
 
         out = self.grouped_permute_and_compute(
             x,
@@ -124,7 +128,7 @@ class dMoA(torch.nn.Module):
         scores, expert_weights, top_experts = self.router(x)
 
         # Compute the experts.
-        return self.experts.map(x, expert_weights, top_experts), self.router.loss
+        return self.experts.map(x, scores, expert_weights, top_experts)
     
     def reduce(self, x):
         x = self.experts.reduce(x)
