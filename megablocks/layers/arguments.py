@@ -23,6 +23,7 @@ class Arguments:
     bias : bool = True
     return_bias : bool = True
     activation_fn : Optional[Callable] = DEFAULT_ACTIVATION_FN
+    moa : bool = False
 
     # MoE arguments.
     moe_num_experts : int = 1
