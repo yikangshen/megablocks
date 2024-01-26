@@ -585,8 +585,8 @@ class GroupedMLP(SparseMLP):
             raise NotImplementedError(
                 "Weight parallelism not yet supported with GroupedMLP.")
 
-        if self.args.memory_optimized_mlp:
-            raise NotImplementedError
+        # if self.args.memory_optimized_mlp:
+        #     raise NotImplementedError
 
         # Compute the MLP.
         return gg.ops.gmm(x, w1, batch_sizes, trans_b=True)
@@ -603,8 +603,8 @@ class GroupedMLP(SparseMLP):
             raise NotImplementedError(
                 "Weight parallelism not yet supported with GroupedMLP.")
 
-        if self.args.memory_optimized_mlp:
-            raise NotImplementedError
+        # if self.args.memory_optimized_mlp:
+        #     raise NotImplementedError
 
         # Compute the MLP.
         return gg.ops.gmm(x, w2, batch_sizes)
