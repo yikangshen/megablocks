@@ -31,20 +31,21 @@ def batched_load_balancing_loss(args : Arguments):
     # tokens_per_expert[i].shape = (num_experts)
     # expert_scores[i].shape = (tokens, num_experts)
     tokens_per_expert, expert_scores = zip(*get_load_balancing_loss())
-    if args.moa:
-        num_layers = args.num_layers * 2
-    else:
-        num_layers = args.num_layers
     num_layers_per_pipeline_stage = (
-        num_layers // args.pipeline_model_parallel_size)
+        args.num_layers // args.pipeline_model_parallel_size)
     if args.num_layers_per_virtual_pipeline_stage is not None:
         num_layers_per_pipeline_stage = args.num_layers_per_virtual_pipeline_stage
+    
+    if args.moa:
+        num_layers_per_pipeline_stage = num_layers_per_pipeline_stage * 2
+    else:
+        num_layers_per_pipeline_stage = num_layers_per_pipeline_stage * 2
 
     if len(tokens_per_expert) != num_layers_per_pipeline_stage:
         raise ValueError(
             f"Expected {num_layers_per_pipeline_stage} token_per_experts "
             f"but found {len(tokens_per_expert)}.\nnum_layers = "
-            f"{num_layers}\npipeline_model_parallel_size = "
+            f"{args.num_layers}\npipeline_model_parallel_size = "
             f"{args.pipeline_model_parallel_size}\n"
             "num_layers_per_virtual_pipeline_stage"
             f" = {args.num_layers_per_virtual_pipeline_stage}")
@@ -52,7 +53,7 @@ def batched_load_balancing_loss(args : Arguments):
         raise ValueError(
             f"Expected {num_layers_per_pipeline_stage} expert_scores "
             f"but found {len(tokens_per_expert)}.\nnum_layers = "
-            f"{num_layers}\npipeline_model_parallel_size = "
+            f"{args.num_layers}\npipeline_model_parallel_size = "
             f"{args.pipeline_model_parallel_size}\n"
             "num_layers_per_virtual_pipeline_stage"
             f" = {args.num_layers_per_virtual_pipeline_stage}")
@@ -90,7 +91,7 @@ def batched_load_balancing_loss(args : Arguments):
         args.moe_loss_weight
     )
     scale_denominator = (
-        num_layers *
+        args.num_layers *
         tokens *
         args.moe_top_k
     )
