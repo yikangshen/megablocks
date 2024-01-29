@@ -38,8 +38,6 @@ def batched_load_balancing_loss(args : Arguments):
     
     if args.moa:
         num_layers_per_pipeline_stage = num_layers_per_pipeline_stage * 2
-    else:
-        num_layers_per_pipeline_stage = num_layers_per_pipeline_stage * 2
 
     if len(tokens_per_expert) != num_layers_per_pipeline_stage:
         raise ValueError(
