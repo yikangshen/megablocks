@@ -89,7 +89,7 @@ def batched_load_balancing_loss(args : Arguments):
         args.moe_loss_weight
     )
     scale_denominator = (
-        args.num_layers *
+        # args.num_layers *
         tokens *
         args.moe_top_k
     )
