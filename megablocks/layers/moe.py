@@ -96,7 +96,7 @@ def batched_load_balancing_loss(args : Arguments):
     )
     scale = scale_numerator / scale_denominator
 
-    zloss = (torch.log(torch.exp(expert_logits).sum(dim=-1)) ** 2).sum() / scale_denominator
+    zloss = (torch.log(torch.exp(expert_logits).sum(dim=-1)) ** 2).sum() / tokens
     return scale * torch.dot(tokens_per_expert, expert_scores) + args.moe_zloss_weight * zloss
 
 
