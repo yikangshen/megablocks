@@ -321,7 +321,7 @@ class dMoE(torch.nn.Module):
         x = common.cast_if_autocast_enabled(x)
 
         # Compute the expert scores and assignments.
-        scores, expert_weights, top_experts = self.router(x)
+        scores, logits, expert_weights, top_experts = self.router(x)
 
         # Compute the experts.
-        return self.experts(x, scores, expert_weights, top_experts)
+        return self.experts(x, scores, logits, expert_weights, top_experts)

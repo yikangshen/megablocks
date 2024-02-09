@@ -28,7 +28,7 @@ class ParallelDroplessLinear(moe.ParallelMLP):
         self.transpose_sort_end_bit = max(
             int(np.ceil(np.log2(max_column_index))), 1)
     
-    def map(self, x, scores, expert_weights, top_experts):
+    def map(self, x, scores, logits, expert_weights, top_experts):
         # x: [sl, bs, hs]
         # expert_weights: [sl * bs, top-k]
         # top_experts: [sl * bs, top-k]
@@ -40,7 +40,7 @@ class ParallelDroplessLinear(moe.ParallelMLP):
                 self.indices_and_bins(top_experts))
         
         if self.training:
-            moe.save_load_balancing_loss((self.tokens_per_expert, scores))
+            moe.save_load_balancing_loss((self.tokens_per_expert, scores, logits))
 
         out = self.grouped_permute_and_compute(
             x,
@@ -125,10 +125,10 @@ class dMoA(torch.nn.Module):
         x = common.cast_if_autocast_enabled(x)
 
         # Compute the expert scores and assignments.
-        scores, expert_weights, top_experts = self.router(x)
+        scores, logits, expert_weights, top_experts = self.router(x)
 
         # Compute the experts.
-        return self.experts.map(x, scores, expert_weights, top_experts)
+        return self.experts.map(x, scores, logits, expert_weights, top_experts)
     
     def reduce(self, x):
         x = self.experts.reduce(x)
