@@ -16,6 +16,31 @@ def log_gmm_posterior(z, expert_centroids):
      )
 
 
+class SwiGLU_gate(nn.Module):
+    def __init__(
+        self, 
+        input_size,
+        num_experts,
+        hidden_size, 
+        bias=False,
+        dropout=0.0,
+        ):
+        super(SwiGLU_gate, self).__init__()
+        self.num_experts = num_experts
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.bias = bias
+        self.dropout = dropout
+        self.w1w2 = nn.Linear(input_size, hidden_size * 2, bias)
+        self.w3 = nn.Linear(hidden_size, num_experts, bias)
+        
+    def forward(self, x):
+        x1, x2 = F.linear(x, self.w1w2.weight, self.w1w2.bias).chunk(2, dim=-1)
+        hidden = F.silu(x1) * x2
+        hidden = F.dropout(hidden, p=self.dropout, training=self.training)
+        y = F.linear(hidden, self.w3.weight, self.w3.bias)
+        return y
+
 
 class top_k_gating(nn.Module):
     def __init__(
@@ -51,6 +76,8 @@ class top_k_gating(nn.Module):
                 # nn.Dropout(dropout),
                 nn.Linear(hidden_size, num_experts, bias=False)
             )
+        if gate_type == 'swiglu':
+            self.w_gate = SwiGLU_gate(input_size, num_experts, hidden_size=hidden_size, bias=False)
         elif gate_type == 'linear':
             self.w_gate = nn.Sequential(
                 nn.Linear(input_size, num_experts, bias=False)
@@ -123,7 +150,7 @@ class top_k_gating(nn.Module):
             load: a Tensor with shape [num_experts]
         """
         x = x.view(-1, x.shape[-1])
-        if self.gate_type in ['linear', 'mlp']:
+        if self.gate_type in ['linear', 'mlp', 'swiglu']:
             logits = self.w_gate(x)
         elif self.gate_type == 'gmm':
             z = self.w_gate(x)

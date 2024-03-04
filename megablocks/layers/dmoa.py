@@ -131,7 +131,7 @@ class dMoA(torch.nn.Module):
     def get_aux_loss_and_clear(self):
         return self.router.get_aux_loss_and_clear()
 
-    def map(self, x):
+    def map(self, x, **kwargs):
         # NOTE: If we're going to cast the activations to lower precision
         # do it before we permute the tokens to save bandwidth.
         x = common.cast_if_autocast_enabled(x)
@@ -141,7 +141,7 @@ class dMoA(torch.nn.Module):
 
         # Compute the experts.
         
-        return self.experts.map(x, expert_weights, top_experts), self.router.loss
+        return self.experts.map(x, expert_weights, top_experts), self.router.loss, torch.zeros(1).to(x.device), torch.zeros(1).to(x.device)
     
     def reduce(self, x):
         x = self.experts.reduce(x)

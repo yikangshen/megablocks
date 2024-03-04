@@ -328,7 +328,7 @@ class dMoE(torch.nn.Module):
     def get_aux_loss_and_clear(self):
         return self.router.get_aux_loss_and_clear()
 
-    def forward(self, x):
+    def forward(self, x, **kwargs):
         # NOTE: If we're going to cast the activations to lower precision
         # do it before we permute the tokens to save bandwidth.
         x = common.cast_if_autocast_enabled(x)
@@ -337,4 +337,4 @@ class dMoE(torch.nn.Module):
         scores, expert_weights, top_experts = self.router(x)
 
         # Compute the experts.
-        return self.experts(x, scores, expert_weights, top_experts), self.router.loss
+        return self.experts(x, scores, expert_weights, top_experts), self.router.loss, torch.zeros(1).to(x.device), torch.zeros(1).to(x.device)
