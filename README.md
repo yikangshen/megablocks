@@ -17,21 +17,26 @@ from flash_attn import flash_attn_func
 from rotary_embedding_torch import RotaryEmbedding
 
 class SparseCausalSelfAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(
+      self, 
+      hidden_dim: int,
+      n_head: int,
+      moe_top_k: int,
+      n_att_experts: int
+    ):
         super().__init__()
-        assert config.hidden_dim % config.n_head == 0
+        assert hidden_dim % n_head == 0
 
-        self.n_head = config.n_head
-        self.top_k = config.k_att
-        self.hidden_dim = config.hidden_dim
-        self.att_hidden = config.hidden_dim
-        self.head_size = config.att_hidden // config.n_head
+        self.n_head = n_head
+        self.moe_top_k = moe_top_k
+        self.hidden_dim = hidden_dim
+        self.head_size = hidden_dim // n_head
 
         args = Arguments(
-            hidden_size=config.hidden_dim,
-            ffn_hidden_size=self.att_hidden,
-            moe_num_experts=config.n_att_experts,
-            moe_top_k=config.k_att,
+            hidden_size=hidden_dim,
+            ffn_hidden_size=hidden_dim,
+            moe_num_experts=n_att_experts,
+            moe_top_k=moe_top_k,
             mlp_type='mlp',
             mlp_impl='grouped',
             memory_optimized_mlp=True,
@@ -39,8 +44,8 @@ class SparseCausalSelfAttention(nn.Module):
             activation_fn=None,
         )
         self.q_proj = dMoA(args)
-        self.k_proj = nn.Linear(config.hidden_dim, self.att_hidden)
-        self.v_proj = nn.Linear(config.hidden_dim, self.att_hidden)
+        self.k_proj = nn.Linear(hidden_dim, hidden_dim)
+        self.v_proj = nn.Linear(hidden_dim, hidden_dim)
 
         self.rotary_embed = RotaryEmbedding(self.head_size // 2)
         rope_freqs = self.rotary_embed.freqs.data
@@ -57,12 +62,12 @@ class SparseCausalSelfAttention(nn.Module):
 
         context_length = k.size(1)
         
-        q = q.view(B, T, self.top_k * self.n_head, self.head_size) # (B, T, k * nh, hs)
+        q = q.view(B, T, self.moe_top_k * self.n_head, self.head_size) # (B, T, k * nh, hs)
         k = k.view(B, context_length, self.n_head, self.head_size) # (B, T, nh, hs)
         v = v.view(B, context_length, self.n_head, self.head_size) # (B, T, nh, hs)
 
-        k = k.repeat(1, 1, self.top_k, 1) # (B, T, k * nh, hs)
-        v = v.repeat(1, 1, self.top_k, 1) # (B, T, k * nh, hs)
+        k = k.repeat(1, 1, self.moe_top_k, 1) # (B, T, k * nh, hs)
+        v = v.repeat(1, 1, self.moe_top_k, 1) # (B, T, k * nh, hs)
 
         q = q.permute(0, 2, 1, 3)
         k = k.permute(0, 2, 1, 3)
@@ -73,7 +78,7 @@ class SparseCausalSelfAttention(nn.Module):
         y = flash_attn_func(q, k, v, causal=True)
 
         # output projection
-        y = self.q_proj.reduce(y.reshape(B, T, self.top_k, self.att_hidden).type_as(x))
+        y = self.q_proj.reduce(y.reshape(B, T, self.moe_top_k, self.hidden_dim).type_as(x))
 
         y = y.view(B, T, C) # re-assemble all head outputs side by side
         return y
