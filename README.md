@@ -1,5 +1,85 @@
 # :robot: MegaBlocks
 
+This is a modified version of the original MegaBlocks repository. The original repository can be found [here](https://github.com/databricks/megablocks).
+The modifications include:
+- [x] Added support for Mixture of Attention heads (https://arxiv.org/abs/2210.05144)
+- [x] Added support for zloss introduced in ST-MoE (https://arxiv.org/pdf/2202.08906.pdf)
+
+Here is an example of implementing the Mixture of Attention heads with this library:
+```python
+import torch
+import torch.nn as nn
+
+from megablocks.layers.arguments import Arguments
+from megablocks.layers.moa import dMoA
+
+from flash_attn import flash_attn_func
+from rotary_embedding_torch import RotaryEmbedding
+
+class SparseCausalSelfAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        assert config.hidden_dim % config.n_head == 0
+
+        self.n_head = config.n_head
+        self.top_k = config.k_att
+        self.hidden_dim = config.hidden_dim
+        self.att_hidden = config.hidden_dim
+        self.head_size = config.att_hidden // config.n_head
+
+        args = Arguments(
+            hidden_size=config.hidden_dim,
+            ffn_hidden_size=self.att_hidden,
+            moe_num_experts=config.n_att_experts,
+            moe_top_k=config.k_att,
+            mlp_type='mlp',
+            mlp_impl='grouped',
+            memory_optimized_mlp=True,
+            bias=False,
+            activation_fn=None,
+        )
+        self.q_proj = dMoA(args)
+        self.k_proj = nn.Linear(config.hidden_dim, self.att_hidden)
+        self.v_proj = nn.Linear(config.hidden_dim, self.att_hidden)
+
+        self.rotary_embed = RotaryEmbedding(self.head_size // 2)
+        rope_freqs = self.rotary_embed.freqs.data
+        del self.rotary_embed.freqs
+        self.rotary_embed.register_buffer("freqs", rope_freqs)
+
+    def forward(self, x):
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        q = self.q_proj.map(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+
+        context_length = k.size(1)
+        
+        q = q.view(B, T, self.top_k * self.n_head, self.head_size) # (B, T, k * nh, hs)
+        k = k.view(B, context_length, self.n_head, self.head_size) # (B, T, nh, hs)
+        v = v.view(B, context_length, self.n_head, self.head_size) # (B, T, nh, hs)
+
+        k = k.repeat(1, 1, self.top_k, 1) # (B, T, k * nh, hs)
+        v = v.repeat(1, 1, self.top_k, 1) # (B, T, k * nh, hs)
+
+        q = q.permute(0, 2, 1, 3)
+        k = k.permute(0, 2, 1, 3)
+        q = self.rotary_embed.rotate_queries_or_keys(q, seq_dim=-2, offset=context_length - T)
+        k = self.rotary_embed.rotate_queries_or_keys(k, seq_dim=-2)
+        q = q.permute(0, 2, 1, 3)
+        k = k.permute(0, 2, 1, 3)
+        y = flash_attn_func(q, k, v, causal=True)
+
+        # output projection
+        y = self.q_proj.reduce(y.reshape(B, T, self.top_k, self.att_hidden).type_as(x))
+
+        y = y.view(B, T, C) # re-assemble all head outputs side by side
+        return y
+```
+
+# Original Introduction
 MegaBlocks is a light-weight library for mixture-of-experts (MoE) training. The core of the system is efficient "dropless-MoE" ([dMoE](megablocks/layers/dmoe.py), [paper](https://arxiv.org/abs/2211.15841)) and standard [MoE](megablocks/layers/moe.py) layers.
 
 MegaBlocks is integrated with [Megatron-LM](https://github.com/NVIDIA/Megatron-LM), where we support data, expert and pipeline parallel training of MoEs. Stay tuned for tighter integration with Databricks libraries and tools!
