@@ -104,8 +104,7 @@ class ParallelDroplessLinear(moe.ParallelMLP):
             bin_ids,
             expert_weights,
             bins,
-            top_k if not map else 1,
-            self.args.quantize_scatter_num_bits)
+            top_k if not map else 1)
     
 
 class dMoA(torch.nn.Module):
